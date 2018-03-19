@@ -83,7 +83,7 @@ When I say "inadequate" or "inconsistent" here, I am describing the quality rela
 
 # Entity-relationship diagram
 ```{r, fig.cap = "\\label{fig:figs}ERD model for LAGOS Lake Link crosswalk table"}
-knitr::include_graphics('./ERD_as_is.PNG')
+knitr::include_graphics('./images/ERD_as_is.PNG')
 ```
 
 # Processing Pipeline
@@ -97,7 +97,7 @@ knitr::include_graphics('./ERD_as_is.PNG')
 6) **Select again** again as needed before the final join.
 
 ```{r}
-knitr::include_graphics('./Processing_flow.PNG')
+knitr::include_graphics('./images/Processing_flow.PNG')
 ```
 
 Finally, the results of the multiple joins in step 4 will be merged into a single crosswalk table with only the necessary fields remaining.
@@ -114,8 +114,8 @@ We'll import the GIS polygon layer prepared for LAGOS-US.
 #   st_zm(drop=TRUE) %>%
 #   mutate(GNIS_ID = as.integer(GNIS_ID)) %>%
 #   st_transform(ALBERS_USGS) # no actual change, just proj4string housekeeping.
-# save(lagos_sf, file = 'lagos_sf.RData')
-load('lagos_sf.RData')
+# save(lagos_sf, file = './rdata/lagos_sf.RData')
+load('./rdata/lagos_sf.RData')
 glimpse(lagos_sf)
 ```
 
@@ -272,8 +272,8 @@ Glimpse the original WQP table.
 ```{r read-wqp, cache = TRUE, message = FALSE, warning = FALSE}
 ## This query can run long
 # wqp_orig <- whatWQPsites(bBox = "-127,24,-67,50", countrycode = "US")
-# save(wqp_orig, file = 'wqp_orig.RData')
-load('wqp_orig.RData')
+# save(wqp_orig, file = './rdata/wqp_orig.RData')
+load('./rdata/wqp_orig.RData')
 glimpse(wqp_orig)
 ```
 
@@ -373,8 +373,8 @@ wqp_sites_with_0m_match <- lagos_wqp_0m %>%
 
 # Still 6.5 minutes on my machine when I timed it, and more in later runs.
 # lagos_10 <- st_buffer(lagos, 10)
-# save(lagos_10, file = "lagos_10.RData")
-load('lagos_10.RData')
+# save(lagos_10, file = "./rdata/lagos_10.RData")
+load('./rdata/lagos_10.RData')
 
 lagos_wqp_10m <- wqp %>%
   anti_join(wqp_sites_with_0m_match, by = "MonitoringLocationIdentifier") %>%
@@ -395,8 +395,8 @@ wqp_sites_with_10m_match <- lagos_wqp_10m %>%
 
 # # 19 minutes on my machine. Load image instead.
 # lagos_100 <- st_buffer(lagos, 100)
-# save(lagos_100, file = "lagos_10.RData")
-load('lagos_100.RData')
+# save(lagos_100, file = "./rdata/lagos_10.RData")
+load('./rdata/lagos_100.RData')
 
 lagos_wqp_100m <- wqp %>%
   anti_join(wqp_sites_with_10m_match, by = "MonitoringLocationIdentifier") %>%
@@ -479,8 +479,8 @@ Glimpse the NHDReachCrossReference table.
 ## or sf > 0.6-1 on CRAN to be released March 2018
 # nhd_xref <- st_read('D:/Continental_Limnology/Data_Working/LAGOS_US_Predecessors.gdb', 'NHDReachCrossReference_lakes') %>%
 #   select(OldReachCode, OldReachDate, NewReachCode, NewReachDate)
-# save(nhd_xref, file = 'nhd_xref.RData')
-load('nhd_xref.RData')
+# save(nhd_xref, file = './rdata/nhd_xref.RData')
+load('./rdata/nhd_xref.RData')
 
 glimpse(nhd_xref)
 ```
@@ -609,8 +609,8 @@ Glimpse the original LAGOS-NE dataset.
 #   st_zm(drop=TRUE) %>%
 #   mutate(GNIS_ID = as.numeric(GNIS_ID)) %>%
 #   st_transform(ALBERS_USGS) # no actual change, just proj4string housekeeping.
-# save(lagosNE_orig, file = 'lagosNE_orig.RData')
-load('lagosNE_orig.RData')
+# save(lagosNE_orig, file = './rdata/lagosNE_orig.RData')
+load('./rdata/lagosNE_orig.RData')
 glimpse(lagosNE_orig)
 ```
 
@@ -711,8 +711,8 @@ With luck, we can work around this issue.
 # # dbf_path <- archive::archive_extract(tf, '.', 'NHDPlusV1Network_V2Network_Crosswalk.dbf')$path[1]
 # # v1_v2_xwalk <- foreign::read.dbf(dbf_path[1])
 # # unlink(tf)
-# # save(v1_v2_xwalk, file = 'v1_v2_xwalk.RData')
-# load('v1_v2_xwalk.RData')
+# # save(v1_v2_xwalk, file = './rdata/v1_v2_xwalk.RData')
+# load('./rdata/v1_v2_xwalk.RData')
 # glimpse(v1_v2_xwalk)
 ```
 
