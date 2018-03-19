@@ -329,6 +329,7 @@ wqp_sf <- rbind(wqp_nad83, wqp_nad27, wqp_wgs84)
 
 # Cleanup
 rm(wqp_nad83, wqp_nad27, wqp_wgs84)
+#save(wqp_sf, file = "./rdata/wqp_sf.RData")
 ```
 
 ## Select
