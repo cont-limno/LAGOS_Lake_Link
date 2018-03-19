@@ -11,6 +11,10 @@ This notebook will show some examples of the complex relationships that can be f
 LAGOS Lake Link is a tabular dataset (a crosswalk table) that can be used to connect one lake-related dataset to another for many common lake datasets. Several lake datasets are in common use on their own or as a base for scientific data products and LAGOS Lake Link is intended to make it easier to combine lake-related data between multiple sources. The table can be searched to find identifiers and location for a particular lake, or it can be used in data join operations to convert identifiers en masse. 
 
 # Data dictionary
+```{r}
+
+```
+
 
 # Entity-relationship diagram
 ```{r, fig.cap = "\\label{fig:figs}ERD model for LAGOS Lake Link crosswalk table"}
@@ -54,7 +58,7 @@ find_lake_word <- function(data, search_term, state_abbr = NULL) {
 
 ```{r, include = FALSE, cache = TRUE, cache.extra = tools::md5sum("LAGOS_Lake_Link.csv")}
 # Read in the crosswalk file
-xwalk <- read_csv("LAGOS_Lake_Link.csv", col_types = cols(GNIS_ID = col_double(), NHDHR_PermanentIdentifier = col_character(), NHDPlusv2_COMID = col_character())) %>%
+xwalk <- read_csv("LAGOS_Lake_Link_v0.csv", col_types = cols(GNIS_ID = col_double(), NHDHR_PermanentIdentifier = col_character(), NHDPlusv2_COMID = col_character())) %>%
   mutate(GNIS_ID = as.integer(GNIS_ID))
 
 ```
