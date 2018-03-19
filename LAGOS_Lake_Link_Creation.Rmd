@@ -861,3 +861,6 @@ H) A user cannot connect WQP sites to the NHDPlusV2 representation of lakes. Exa
 
 ## Proposed ER Diagram demonstrating change "A" and "H" above
 ![*Proposed entity-relationship diagram showing two additions, in color*](./images/ERD_proposed.PNG)
+
+# Link to Demo document
+You can find a demonstration of LAGOS Lake Link [here](./LAGOS_Lake_Link_Demo.nb.html)
