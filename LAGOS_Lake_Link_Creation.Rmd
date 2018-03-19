@@ -1,5 +1,6 @@
 ---
 title: 'LAGOS Lake Link: Creation'
+always_allow_html: yes
 output:
   html_notebook
 ---
@@ -107,7 +108,7 @@ The primary identifier for lakes in this dataset is **lagoslakeid**. A secondary
 
 ## Import
 We'll import the GIS polygon layer prepared for LAGOS-US. Glimpse the polygon layer:
-```{r read-lagos, cache=TRUE}
+```{r read-lagos}
 # lagos_sf <- st_read('D:/Continental_Limnology/Data_Working/LAGOS_US_Predecessors.gdb', 'NHDWaterbody_LAGOS', stringsAsFactors = FALSE) %>%
 #   st_zm(drop=TRUE) %>%
 #   mutate(GNIS_ID = as.integer(GNIS_ID)) %>%
@@ -139,7 +140,7 @@ The **number of LAGOS-US lakes** after filtering is **`r nrow(lagos_sf)`**.
 
 ## Convert and Select
 We will select several columns and create two alternate representations of the LAGOS-US dataset: centroids and no geometry.
-```{r convert-lagos, echo = TRUE, cache = TRUE}
+```{r convert-lagos, echo = TRUE}
 lagos <- lagos_sf %>%
   select(lagoslakeid, 
          Permanent_Identifier, 
@@ -166,7 +167,7 @@ lagos_df <- lagos %>% st_set_geometry(NULL)
 The GNIS dataset contains place names for a variety of geographic features, including lakes, in the United States. Locations are represented as latitude/longitude pairs. Most NHD lakes already have a GNIS name assigned, but in some cases where lakes had multiple names, they were not assigned a name in the NHD. To populate the lake name as fully as possible, we searched the GNIS dataset to both add missing names where available and to document lakes with multiple names, which we then retain in LAGOS-US.
 
 ## Import
-```{r read-gnis, cache=TRUE, include = FALSE}
+```{r read-gnis, include = FALSE}
 # gnis_link <- 'https://geonames.usgs.gov/docs/stategaz/NationalFile_20180201.zip' # changes with updates
 # tf <- tempfile()
 # download.file(gnis_link, tf)
@@ -235,7 +236,7 @@ lagos_gnis_1 <- gnis %>%
 
 GNIS Names contained by the polygon are assigned to the lake. A new column, "LAGOS Lake Name" is created and multiple names for a lake are separated by semi-colons. This will eliminate the 1:many relationship created in the join.
 
-```{r join-gnis2, cache = TRUE}
+```{r join-gnis2}
 lagos_gnis_2 <- lagos %>%
   st_join(gnis)
 
@@ -269,7 +270,7 @@ The WQP API allows queries of all water quality monitoring sites that are submit
 
 ## Import
 Glimpse the original WQP table.
-```{r read-wqp, cache = TRUE, message = FALSE, warning = FALSE}
+```{r read-wqp, message = FALSE, warning = FALSE}
 ## This query can run long
 # wqp_orig <- whatWQPsites(bBox = "-127,24,-67,50", countrycode = "US")
 # save(wqp_orig, file = './rdata/wqp_orig.RData')
@@ -338,7 +339,7 @@ wqp <- wqp_sf %>%
 
 ## Join LAGOS-US
 1) WQP sites within a lake polygon are linked to that polygon.
-```{r join-wqp1, cache = TRUE}
+```{r join-wqp1}
 lagos_wqp_0m <- wqp %>%
   st_join(lagos) %>%
   rename(lagoslakeid_0m = lagoslakeid) %>%
@@ -361,7 +362,7 @@ weird_matches %>%
 ```
 
 2) WQP sites can be joined to a lake polygon if they are within 10 meters of it.
-```{r join-wqp3, cache = TRUE}
+```{r join-wqp3}
 wqp_sites_with_0m_match <- lagos_wqp_0m %>%
   st_set_geometry(NULL) %>%
   filter(!is.na(lagoslakeid_0m)) %>%
@@ -387,7 +388,7 @@ rm(lagos_10)
 ```
 
 3) Other sites can be joined if they are within 100 m of a lake polygon, not within an NHDArea StreamRiver feature, and share name words other than "lake", "reservoir", etc.
-```{r join-wqp4, cache = TRUE}
+```{r join-wqp4}
 wqp_sites_with_10m_match <- lagos_wqp_10m %>%
   st_set_geometry(NULL) %>%
   filter(!is.na(lagoslakeid_10m)) %>%
@@ -467,7 +468,7 @@ The medium-resolution NHD contains a popular medium-resolution representation of
 The version of the NHDReachCrossReference table that we use has already been filtered to include only the reach codes for lakes and reservoirs in the NHD HR (e.g. streams, wetlands, etc. were removed) to reduce the table size. You could use the full original table with no change to the results.
 
 Glimpse the NHD table.
-```{r read-nhd, cache = TRUE}
+```{r read-nhd}
 # nhd_plus_orig <- st_read('D:/Not_ContLimno/NHDPlus V2/NHDPlusNationalData/NHDPlusV21_National_Seamless.gdb', 'NHDWaterbody', stringsAsFactors = FALSE) %>%
 #   mutate(GNIS_ID = as.numeric(GNIS_ID)) # to match the others
 # save(nhd_plus_orig, file = './rdata/nhd_plus_orig.RData')
@@ -608,7 +609,7 @@ When the LAGOS-US lagoslakeid values were generated, they were joined on Permane
 
 ## Import
 Glimpse the original LAGOS-NE dataset.
-```{r read-ne, cache=TRUE}
+```{r read-ne}
 # lagosNE_orig <- st_read('C:/Users/smithn78/Dropbox/CSI/CSI_LAGOS-exports/LAGOS-NE-EDI/LAGOS-NE-GIS/FileGDB/LAGOS_NE_GIS_Data_v1.0.gdb', 'LAGOS_NE_All_Lakes_1ha') %>%
 #   st_zm(drop=TRUE) %>%
 #   mutate(GNIS_ID = as.numeric(GNIS_ID)) %>%
