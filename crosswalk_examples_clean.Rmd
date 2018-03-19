@@ -1,0 +1,283 @@
+---
+title: "Crosswalk Demo"
+output: html_notebook
+---
+This notebook will show some examples of the complex relationships that can be found in the LAGOS Lake Link (lake identifier crosswalk) as well as examples of problems that could possibly be solved with some more work. For a more detailed introduction to LAGOS Lake Link and a description of the creation process, see the document "LAGOS Lake Link: Creation"
+
+# Definitions in this document
+"Lake": Permanent lake or reservoir.
+
+# What is LAGOS Lake Link?
+LAGOS Lake Link is a tabular dataset (a crosswalk table) that can be used to connect one lake-related dataset to another for many common lake datasets. Several lake datasets are in common use on their own or as a base for scientific data products and LAGOS Lake Link is intended to make it easier to combine lake-related data between multiple sources. The table can be searched to find identifiers and location for a particular lake, or it can be used in data join operations to convert identifiers en masse. 
+
+# Data dictionary
+
+# Entity-relationship diagram
+```{r, fig.cap = "\\label{fig:figs}ERD model for LAGOS Lake Link crosswalk table"}
+knitr::include_graphics('./ERD_as_is.PNG')
+```
+
+
+<!---Add summary of the 25% non-link, multi-link, easy link, something high-level. what percent of lagoslakeids don't change?--->
+<!---Add legacy ID promises--->
+<!---Now to-do: Add Legacy ID from LAGOS-NE.--->
+
+```{r setup}
+library(tidyverse)
+library(sf)
+library(dataRetrieval) # WQP web service library
+library(XML)
+library(leaflet)
+library(mapview)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+NHD_URL <- 'https://hydro.nationalmap.gov/arcgis/services/nhd/MapServer/WMSServer'
+
+find_lake_word <- function(data, search_term, state_abbr = NULL) {
+  if (!missing(state_abbr)) {
+    if (!state_abbr %in% state.abb) stop("Use a valid 2-letter state abbreviation")
+  }
+  if (missing(state_abbr)) {
+    filtered_data <- data[apply(data, 1, function(x) any(grepl(search_term, x, ignore.case = TRUE))),]
+  }
+  else {
+    filtered_data <- data[apply(data, 1, function(x) any(grepl(search_term, x, ignore.case = TRUE))) & data$State == state.abb,]
+  }
+  return_data <- filtered_data %>%
+    distinct(lagoslakeid) %>%
+    inner_join(data, by = "lagoslakeid")
+  return(return_data)
+  
+}
+```
+
+```{r, include = FALSE, cache = TRUE, cache.extra = tools::md5sum("LAGOS_Lake_Link.csv")}
+# Read in the crosswalk file
+xwalk <- read_csv("LAGOS_Lake_Link.csv", col_types = cols(GNIS_ID = col_double(), NHDHR_PermanentIdentifier = col_character(), NHDPlusv2_COMID = col_character())) %>%
+  mutate(GNIS_ID = as.integer(GNIS_ID))
+
+```
+
+Preview of the crosswalk table. As a reminder, there are **`r xwalk %>% distinct(lagoslakeid) %>% count() %>% pull()` LAGOS-US lakes**.
+```{r}
+glimpse(xwalk, width = 100)
+```
+
+# List of to-dos and ideas to make more or better connections to improve the crosswalk
++ Get the county added in. For some reason it's not in LAGOS-US lakes layer.
++ "Low confidence"--do I want to bother with these?
++ Link NHD version lakes through spatial analysis.
++ Add "nearest municipality." using TIGER data.
++ Replace the GNIS information with our own lake and state information. 
++ Use NHDPlusv2 link to get to NLA 2007 and NLA 2012 site IDs (some manual resolution probably required)
++ Manual links for LAGOS-NE lakes that have limno data (26 lakes).
++ Merge NHDPlusv2 names into the semi-colon list.
++ Add the "update date" values. How should these look?
++ **Add Lat/Lon for WQP sample site?**
++ **If LAGOS-NE lake can't be connected to LAGOS-US lake even though it should be, drops out and currently isn't found in the crosswalk. Do we want it this way or not?**
+
+# Things that can't be done with the crosswalk (more to-dos? or simply limitations)
++ Find identifiers pertaining to a lake that isn't in LAGOS.
++ Connect WQP sites to the NHDPlusv2 representation of lakes. (TO DO: Can this be fixed? How? Spatial join to NHDPlus v2 and do the exact same thing as with the LAGOS-WQP joins. Example: 2 MR lakes to 1 HR. The WQP sites would appear with their correct reach code in the NHD Plus fairly easily. Backward from that: 1 MR lake to 2 HR lakes.
+
+# 1:1 relationships, or, "easy ones"
+A large proportion of lakes connect easily and don't split or merge polygons over time. The crosswalk has all lakes greater than or equal to 1 hectare, but some of those are too small to be in the NHDPlusv2, so let's only check lakes greater than or equal to 4 hectares.
+```{r}
+lagos_lake_count_4ha <- xwalk %>% 
+  filter(NHDHR_AreaSqKm >= 0.04) %>%
+  distinct(lagoslakeid) %>%
+  nrow()
+count_easy <- xwalk %>%
+  filter(NHDHR_AreaSqKm >= 0.04) %>%
+  filter(count_lagos_per_lagosNE_id <= 1 & # LAGOS-NE only has partial coverage so 0 is just fine
+           count_lagos_per_nhdplusv2_id == 1 &
+           count_lagosNE_per_lagos_id == 1 &
+           count_nhdplusv2_per_lagos_id == 1) %>%
+  distinct(lagoslakeid) %>%
+  nrow()
+
+pct1 <- round(100*count_easy/lagos_lake_count_4ha, 0)
+```
+**`r pct1`% of lakes are very simple!** They may have multiple WQP sites, which is a bit more intuitive than the other 1: many relationships.
+
+Here is an example lake. Bask in its comforting consistency, because things are about to get more complex.
+```{r}
+xwalk %>% filter(lagoslakeid == 1)
+```
+
+Equally simple, a large proportion of lakes has no matches for anything. Here is an example:
+```{r}
+xwalk %>% filter(lagoslakeid == 256832)
+```
+
+# 1:many relationship exploration
+
+## LAGOS-US & WQP
+```{r}
+(n_lagos_wqp <- xwalk %>%
+  mutate(Number_of_WQP_sites_per_LAGOS_lake = case_when(count_wqp_per_lagos_id == 0 ~ '0', count_wqp_per_lagos_id == 1 ~ '1', count_wqp_per_lagos_id > 1 ~ '>1')) %>%
+  distinct(Number_of_WQP_sites_per_LAGOS_lake, lagoslakeid) %>%
+  count(Number_of_WQP_sites_per_LAGOS_lake)
+)
+```
+
+Out of the lakes that have a WQP sampling site, about half of them have more than one site within. In total, **`r n_lagos_wqp %>% filter(Number_of_WQP_sites_per_LAGOS_lake != '0') %>% tally() %>% pull()`** LAGOS lakes have WQP sites linked.
+
+### Examples of lakes with more than one WQP site
+This is what a user will see in the crosswalk that should indicate to them that multiple WQP sites are found within a lake. This lake has 10 sites. The lake information is duplicated for every site (i.e., the crosswalk table is not normalized).
+```{r}
+(ex1 <- xwalk %>% filter(lagoslakeid == 3476))
+```
+
+If the lake also joins to multiple other lakes in either the NHDPlusv2 or LAGOS-NE, the user will see something like this. This site has 7 WQP sites and 2 NHDPlusv2 polygons for a total of 14 rows in the crosswalk. It's not possible (currently) to tell which WQP sites go with which NHDPlusv2 polygon. Now both lake and WQP information are duplicated.
+```{r}
+(ex2 <- xwalk %>% filter(lagoslakeid == 4069))
+```
+
+### How many WQP sites didn't link to a LAGOS Lake?
+```{r}
+#load in wqp_filtered?
+wqp_no_link <- wqp_sf %>%
+  anti_join(distinct(xwalk, WQP_MonitoringLocationIdentifier), by = c("MonitoringLocationIdentifier" = "WQP_MonitoringLocationIdentifier"))
+```
+`r nrow(wqp_no_link)` out of `r nrow(wqp_filtered)` sites did not link (`r round(100*nrow(wqp_no_link)/nrow(wqp_filtered),0)`%).
+
+### Map of sites that didn't link.
+As you can see, Great Lakes sites don't always have the "Great Lake" designation in the WQP and we are fine with these sites not linking.
+
+```{r}
+wqp_no_link %>% 
+  filter(startsWith(HUCEightDigitCode,'0406')) %>%
+  select(MonitoringLocationIdentifier, MonitoringLocationName, MonitoringLocationDescriptionText, MonitoringLocationTypeName) %>%
+  mapview()
+```
+
+I would like to ask the limnologists: **What do you make of these samples clustered around large lakes?** The point is on the intended site as you can tell by looking at where the indicated township section would be. What are they sampling here? Should it be linked along with the other lake water quality samples? 
+
+We could improve some of the WQP matches by doing a "closest" join and enforcing a requirement for shared words.
+
+## LAGOS-US & NHDPlusv2
+NHDPlusv2 within LAGOS Lake:
+```{r}
+(count_lagos_nhd <- xwalk %>%
+  mutate(Number_of_NHDPlusv2_per_LAGOS_Lake = case_when(count_nhdplusv2_per_lagos_id == 0 ~ '0', count_nhdplusv2_per_lagos_id == 1 ~ '1', count_nhdplusv2_per_lagos_id > 1 ~ '>1')) %>%
+  distinct(Number_of_NHDPlusv2_per_LAGOS_Lake, lagoslakeid) %>%
+  count(Number_of_NHDPlusv2_per_LAGOS_Lake)
+)
+```
+And vice versa:
+```{r}
+(count_nhd_lagos <- xwalk %>%
+  mutate(Number_of_LAGOS_Lakes_per_NHDPlusv2 = case_when(count_lagos_per_nhdplusv2_id == 0 ~ '0', count_lagos_per_nhdplusv2_id == 1 ~ '1', count_lagos_per_nhdplusv2_id > 1 ~ '>1')) %>%
+  distinct(Number_of_LAGOS_Lakes_per_NHDPlusv2, lagoslakeid) %>%
+  count(Number_of_LAGOS_Lakes_per_NHDPlusv2) %>%
+   filter(!is.na(Number_of_LAGOS_Lakes_per_NHDPlusv2))
+)
+```
+It seems it's more common for NHDPlusv2 lakes to split into multiple LAGOS-US lakes than the other way around, but both occur. Occurs rarely: less than 1% of lakes.
+
+### Missing LAGOS-NHDPlusv2 connections
+
+A large proportion of LAGOS lakes have no NHDPlusv2 lake connection, but I don't actually expect that the smallest lakes would be found in the NHD medium-resolution. Check it out using a **size cutoff of 10 hectares**, which is more than large enough to appear in both.
+```{r}
+(count_lagos_nhd_4ha <- xwalk %>%
+   filter(NHDHR_AreaSqKm >= 0.1) %>%
+  mutate(Number_of_NHDPlusv2_per_LAGOS_Lake_over10ha = case_when(count_nhdplusv2_per_lagos_id == 0 ~ '0', count_nhdplusv2_per_lagos_id == 1 ~ '1', count_nhdplusv2_per_lagos_id > 1 ~ '>1')) %>%
+  distinct(Number_of_NHDPlusv2_per_LAGOS_Lake_over10ha, lagoslakeid) %>%
+  count(Number_of_NHDPlusv2_per_LAGOS_Lake_over10ha)
+)
+```
+Still, **over 1/4 of 10-hectare lakes have no connection**. This is after we have also searched GNIS_ID for matches. What are some of these lakes? I originally thought I might need to walk through the NHDReachCrossReference table more times, but I can't find an instance where that would help in 20 or so lakes I've hand-checked.
+
+Instead, I found 3 common situations:
+
+1) New reach code is linked to old reach codes that aren't in the NHDPlusv2 waterbody layer
+2) New reach code is created with no old reach codes indicated
+3) There is no equivalent waterbody included in the NHDPlusv2 despite these lakes being more than large enough (this may legimitely happen due to real-world changes over time).
+
+Of these, (3) is a legitimate lack of connection. **(1) and (2) could be linked with a spatial analysis along with a condition that the lake areas are within, say, 25% of each other--I think we could pick up almost 30,000 more lakes this way.**
+
+### Examples of each
+This is what a user will see in the crosswalk that should indicate to them that multiple NHDPlusv2 lakes have been condensed to a single LAGOS-US lake. This lake has 4 NHDPlusv2 connections and 2 WQP sites, so 8 rows appear.
+```{r}
+xwalk %>% filter(count_nhdplusv2_per_lagos_id > 3 & count_nhdplusv2_per_lagos_id <5) %>% sample_n(10)
+
+xwalk %>% filter(lagoslakeid == 2107)
+```
+
+This is what a user will see in the crosswalk that should indicate to them that 1 NHDPlusv2 lake has been split into multiple LAGOS-US lakes. These 4 lagos lakes used to be 1 NHDPlusv2 lake. 1 of them has 4 WQP sites, while the others have none, resulting in 7 rows appearing. Searching by lagoslakeid alone will not indicate the related lakes, of course.
+```{r}
+xwalk %>% filter(NHDPlusv2_COMID == '18469416')
+```
+
+## LAGOS-US & LAGOS-NE
+The relationships seen here bear a strong resemblence to those seen with the NHDPlusv2, above.
+```{r}
+(count_ne_per_us <- xwalk %>%
+  mutate(Number_of_NE_per_US_Lake = case_when(count_lagosNE_per_lagos_id == 0 ~ '0', count_lagosNE_per_lagos_id == 1 ~ '1', count_lagosNE_per_lagos_id > 1 ~ '>1')) %>%
+  distinct(Number_of_NE_per_US_Lake, lagoslakeid) %>%
+  count(Number_of_NE_per_US_Lake)
+)
+
+```
+
+And vice versa:
+```{r}
+(count_us_per_ne <- xwalk %>%
+  mutate(Number_of_US_per_NE_Lake = case_when(count_lagos_per_lagosNE_id == 0 ~ '0', count_lagos_per_lagosNE_id == 1 ~ '1', count_lagos_per_lagosNE_id > 1 ~ '>1')) %>%
+  distinct(Number_of_US_per_NE_Lake, lagoslakeid) %>%
+  count(Number_of_US_per_NE_Lake) %>%
+   filter(!is.na(Number_of_US_per_NE_Lake))
+)
+```
+
+### Example: maximum complexity
+Here's what happens when not only is a LAGOS-US lake associated with multiple LAGOS-NE lake polygons, but also when it has multiples of _everything_. This lake has 2 WQP sites, was once 4 LAGOS-NE lakes, and is associated with 3 NHDPlusv2 lakes. It's not possibly to untangle which sample sites are where or how the LAGOS-NE lakes might relate to the NHDPlusv2 lakes, currently. 24 rows appear for this lake.
+```{r}
+xwalk %>% filter(lagoslakeid == 268427)
+```
+
+# Searching by name
+It is possible to use names to search through all available information in the crosswalk if you build the right sort of function. I have done so in the setup code at the top of this document. Here are the results for the search term 'Cochituate'. This is a chain of lakes known as Lake Cochituate. Even though the NHD doesn't identify all of them by name, the linked WQP sites indicate the association.
+
+```{r}
+find_lake_word(xwalk, 'Cochituate')
+```
+
+
+# Appendix: Useful bits of code for exploration
+This chunk identifies  lakes with a missing NHDPlusv2 connection.
+```{r}
+xwalk %>%
+  filter(NHDHR_AreaSqKm >= 0.1) %>%
+  filter(count_nhdplusv2_per_lagos_id < 1) %>%
+  filter(lagoslakeid < 5000) %>%
+  select(-WQP_MonitoringLocationIdentifier, -WQP_MonitoringLocationName, -WQP_ProviderName) %>%
+  distinct() %>%
+  View()
+```
+And with the help of ArcMap to find equivalent lakes visually, this bit of code helps search for the cause of the missing link.
+```{r}
+load('nhd_xref.RData')
+# slow but effective
+search_nhd_xref <- function(codes, depth = 1) {
+  list_results <- lapply(codes, function(x) filter(nhd_xref, OldReachCode == x | NewReachCode == x))
+  df1 <- do.call("rbind", list_results)
+  if (depth == 2) {
+    codes =  c(pull(df1, OldReachCode), pull(df1, NewReachCode))
+    list_results2 <- lapply(codes, function(x) filter(nhd_xref, OldReachCode == x | NewReachCode == x))
+    df2 <- do.call("rbind", list_results)
+  } else {
+    df2 <- df1
+  }
+  return(df2)
+}
+
+(result <- search_nhd_xref(c('04050001011691','04050001016492'), depth = 2))
+
+# need to have nhd_plus_orig object loaded
+#nhd_plus_orig %>% filter(REACHCODE %in% pull(result, OldReachCode))
+
+```
+
