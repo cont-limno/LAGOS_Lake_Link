@@ -1,7 +1,39 @@
 ---
 title: "Crosswalk Demo"
+always_allow_html: yes
 output: html_notebook
 ---
+
+```{r setup}
+library(tidyverse)
+library(sf)
+library(dataRetrieval) # WQP web service library
+library(XML)
+library(leaflet)
+library(mapview)
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+
+NHD_URL <- 'https://hydro.nationalmap.gov/arcgis/services/nhd/MapServer/WMSServer'
+
+find_lake_word <- function(data, search_term, state_abbr = NULL) {
+  if (!missing(state_abbr)) {
+    if (!state_abbr %in% state.abb) stop("Use a valid 2-letter state abbreviation")
+  }
+  if (missing(state_abbr)) {
+    filtered_data <- data[apply(data, 1, function(x) any(grepl(search_term, x, ignore.case = TRUE))),]
+  }
+  else {
+    filtered_data <- data[apply(data, 1, function(x) any(grepl(search_term, x, ignore.case = TRUE))) & data$State == state.abb,]
+  }
+  return_data <- filtered_data %>%
+    distinct(lagoslakeid) %>%
+    inner_join(data, by = "lagoslakeid")
+  return(return_data)
+  
+}
+```
+
 This notebook will show some examples of the complex relationships that can be found in the LAGOS Lake Link (lake identifier crosswalk) as well as examples of problems that could possibly be solved with some more work. For a more detailed introduction to LAGOS Lake Link and a description of the creation process, see the document "LAGOS Lake Link: Creation"
 
 # Definitions in this document
@@ -24,35 +56,6 @@ data_dictionary
 <!---Add legacy ID promises--->
 <!---Now to-do: Add Legacy ID from LAGOS-NE.--->
 
-```{r setup}
-library(tidyverse)
-library(sf)
-library(dataRetrieval) # WQP web service library
-library(XML)
-library(leaflet)
-library(mapview)
-
-knitr::opts_chunk$set(echo = TRUE)
-
-NHD_URL <- 'https://hydro.nationalmap.gov/arcgis/services/nhd/MapServer/WMSServer'
-
-find_lake_word <- function(data, search_term, state_abbr = NULL) {
-  if (!missing(state_abbr)) {
-    if (!state_abbr %in% state.abb) stop("Use a valid 2-letter state abbreviation")
-  }
-  if (missing(state_abbr)) {
-    filtered_data <- data[apply(data, 1, function(x) any(grepl(search_term, x, ignore.case = TRUE))),]
-  }
-  else {
-    filtered_data <- data[apply(data, 1, function(x) any(grepl(search_term, x, ignore.case = TRUE))) & data$State == state.abb,]
-  }
-  return_data <- filtered_data %>%
-    distinct(lagoslakeid) %>%
-    inner_join(data, by = "lagoslakeid")
-  return(return_data)
-  
-}
-```
 
 ```{r, include = FALSE}
 # Read in the crosswalk file
@@ -126,7 +129,7 @@ load('./rdata/wqp_sf.RData')
 wqp_no_link <- wqp_sf %>%
   anti_join(distinct(xwalk, WQP_MonitoringLocationIdentifier), by = c("MonitoringLocationIdentifier" = "WQP_MonitoringLocationIdentifier"))
 ```
-`r nrow(wqp_no_link)` out of `r nrow(wqp_filtered)` sites did not link (`r round(100*nrow(wqp_no_link)/nrow(wqp_filtered),0)`%).
+`r nrow(wqp_no_link)` out of `r nrow(wqp_sf)` sites did not link (`r round(100*nrow(wqp_no_link)/nrow(wqp_sf),0)`%).
 
 ### Map of sites that didn't link.
 As you can see, Great Lakes sites don't always have the "Great Lake" designation in the WQP and we are fine with these sites not linking.
@@ -234,17 +237,16 @@ find_lake_word(xwalk, 'Cochituate')
 # Appendix: Useful bits of code for exploration
 This chunk identifies  lakes with a missing NHDPlusv2 connection.
 ```{r}
-xwalk %>%
+missing_nhdplusV2 <- xwalk %>%
   filter(NHDHR_AreaSqKm >= 0.1) %>%
   filter(count_nhdplusv2_per_lagos_id < 1) %>%
   filter(lagoslakeid < 5000) %>%
   select(-WQP_MonitoringLocationIdentifier, -WQP_MonitoringLocationName, -WQP_ProviderName) %>%
-  distinct() %>%
-  View()
+  distinct()
 ```
 And with the help of ArcMap to find equivalent lakes visually, this bit of code helps search for the cause of the missing link.
 ```{r}
-load('nhd_xref.RData')
+load('./rdata/nhd_xref.RData')
 # slow but effective
 search_nhd_xref <- function(codes, depth = 1) {
   list_results <- lapply(codes, function(x) filter(nhd_xref, OldReachCode == x | NewReachCode == x))
@@ -259,7 +261,8 @@ search_nhd_xref <- function(codes, depth = 1) {
   return(df2)
 }
 
-(result <- search_nhd_xref(c('04050001011691','04050001016492'), depth = 2))
+(result <- search_nhd_xref(c('04050001011691','04050001016492'), depth = 2) %>%
+    mutate(OldReachCode = as.character(OldReachCode), NewReachCode = as.character(NewReachCode)))
 
 # need to have nhd_plus_orig object loaded
 #nhd_plus_orig %>% filter(REACHCODE %in% pull(result, OldReachCode))
