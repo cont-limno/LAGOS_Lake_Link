@@ -1,7 +1,8 @@
 ---
 title: "Crosswalk Demo"
+output:
+  html_notebook
 always_allow_html: yes
-output: html_notebook
 ---
 
 ```{r setup}
@@ -45,7 +46,7 @@ LAGOS Lake Link is a tabular dataset (a crosswalk table) that can be used to con
 # Data dictionary
 ```{r}
 data_dictionary <- read_csv("LAGOS_Lake_Link_data_dictionary.csv")
-data_dictionary
+knitr::kable(data_dictionary, "html")
 ```
 
 
@@ -145,6 +146,7 @@ I would like to ask the limnologists: **What do you make of these samples cluste
 
 We could improve some of the WQP matches by doing a "closest" join and enforcing a requirement for shared words.
 
+
 ## LAGOS-US & NHDPlusv2
 NHDPlusv2 within LAGOS Lake:
 ```{r}
@@ -185,6 +187,16 @@ Instead, I found 3 common situations:
 3) There is no equivalent waterbody included in the NHDPlusv2 despite these lakes being more than large enough (this may legimitely happen due to real-world changes over time).
 
 Of these, (3) is a legitimate lack of connection. **(1) and (2) could be linked with a spatial analysis along with a condition that the lake areas are within, say, 25% of each other--I think we could pick up almost 30,000 more lakes this way.**
+
+The figures are slightly better when we look at all lakes with a WQP site.
+```{r}
+xwalk %>%
+  filter(count_wqp_per_lagos_id > 0) %>%
+  mutate(Number_of_NHDPlusv2_per_LAGOS_Lake_withWQP = case_when(count_nhdplusv2_per_lagos_id == 0 ~ '0', count_nhdplusv2_per_lagos_id == 1 ~ '1', count_nhdplusv2_per_lagos_id > 1 ~ '>1')) %>%
+  distinct(Number_of_NHDPlusv2_per_LAGOS_Lake_withWQP, lagoslakeid) %>%
+  count(Number_of_NHDPlusv2_per_LAGOS_Lake_withWQP) %>%
+  mutate(pct = round(100*n/sum(n), 2))
+```
 
 ### Examples of each
 This is what a user will see in the crosswalk that should indicate to them that multiple NHDPlusv2 lakes have been condensed to a single LAGOS-US lake. This lake has 4 NHDPlusv2 connections and 2 WQP sites, so 8 rows appear.

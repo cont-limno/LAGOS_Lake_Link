@@ -177,6 +177,12 @@ The GNIS dataset contains place names for a variety of geographic features, incl
 # 
 # save(gnis_orig, file = './rdata/gnis_orig.RData')
 load('./rdata/gnis_orig.RData')
+
+library(tidyverse)
+results <- gnis_orig %>%
+  filter(grepl("aspen", FEATURE_NAME, ignore.case = TRUE))
+View(results)
+?grepl
 ```
 
 Glimpse the original GNIS table.
@@ -588,6 +594,31 @@ nhd_gnis_nhd <- lagos_df %>%
 ```
 It works. **`r nrow(nhd_gnis_nhd)`** lakes that couldn't be linked with NHDReachCrossReference can be linked with the GNIS_ID value.
 
+Analysis on the early versions of LAGOS Lake Link showed that a signification fraction (about 25%) of lakes that should be found both the NHDPlusv2 and the NHD HR could not be linked through the reachcodes or names. As a result, we will add linkages for these lakes through the spatial relationships.
+
+Some thoughts:
+I don't want to add links based on spurious overlaps of the edges of lakes with nearby waterbodies.
+So try the centroids first, but this method has shortcomings.
+Convert the larger feature set to centroids to keep it fast and simple.
+```{r}
+
+lagos_nhd_not_missing <- lagos_nhd_all %>%
+  filter(!is.na(COMID))
+
+lagos_nhd_is_missing <- lagos_centroid %>%
+  inner_join((
+  lagos_nhd_all %>%
+  anti_join(lagos_nhd_not_missing, by = "lagoslakeid") %>%
+  left_join(nhd_gnis_nhd, by = "lagoslakeid") %>%
+  distinct(lagoslakeid, GNIS_Name)
+  ),
+  by = "lagoslakeid")
+
+test <- nhd_plus_orig %>%
+  st_join(lagos_nhd_is_missing)
+
+```
+
 ## Select again
 ```{r select2-nhd, echo = TRUE}
 lagos_nhd_not_missing <- lagos_nhd_all %>%
@@ -602,6 +633,8 @@ lagos_nhd <- lagos_df %>%
   mutate(NHDPlusv2_AreaSqKm = coalesce(AREASQKM.x, AREASQKM.y)) %>%
   select(lagoslakeid, NHDPlusv2_COMID, NHDPlusv2_ReachCode, NHDPlusv2_GNIS_Name, NHDPlusv2_AreaSqKm)
 ```
+
+
 
 # LAGOS-NE
 LAGOS-NE was the first release from the LAGOS project describing lakes in 17 states in the northeastern states. It is similar in most ways to LAGOS-US, but the NHD snapshots were taken several years ago. This dataset can be downloaded and unzipped from [https://portal.edirepository.org/nis/mapbrowse?packageid=edi.98.1].
