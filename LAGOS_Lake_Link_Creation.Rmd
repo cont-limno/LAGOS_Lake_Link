@@ -143,22 +143,23 @@ We will select several columns and create two alternate representations of the L
 ```{r convert-lagos, echo = TRUE}
 lagos <- lagos_sf %>%
   select(lagoslakeid, 
-         Permanent_Identifier, 
+         NHDHR_PermanentIdentifier = Permanent_Identifier, 
          GNIS_ID, 
          GNIS_Name, 
-         ReachCode, 
-         STATE, 
-         AreaSqKm, 
-         FDate,
+         NHDHR_ReachCode = ReachCode, 
+         LAGOS_State = STATE, 
+         NHDHR_AreaSqKm = AreaSqKm, 
+         NHDHR_FDate = FDate,
          LAGOS_CountyName = NAMELSAD,
          LAGOS_CountyFIPS = FIPS)
 
-lagos_centroid <- lagos_sf %>%
+lagos_centroid <- lagos %>%
   st_centroid() %>%
   st_transform(NAD83) %>%
-  mutate(LAGOS_LatitudeNAD83 = st_coordinates(.)[,'Y'], 
-         LAGOS_LongitudeNAD83 = st_coordinates(.)[,'X']) %>%
-  select(lagoslakeid, LAGOS_LatitudeNAD83, LAGOS_LongitudeNAD83)
+  mutate(LAGOS_LakeLatitude = st_coordinates(.)[,'Y'], 
+         LAGOS_LakeLongitude = st_coordinates(.)[,'X']) %>%
+  select(lagoslakeid, NHDHR_PermanentIdentifier, NHDHR_ReachCode, LAGOS_State, NHDHR_AreaSqKm, NHDHR_FDate, LAGOS_LakeLatitude, LAGOS_LakeLongitude, LAGOS_CountyName, LAGOS_CountyFIPS) %>%
+  st_set_geometry(NULL)
 
 lagos_df <- lagos %>% st_set_geometry(NULL)
 ```
@@ -268,7 +269,7 @@ Select only the desired names and identifiers.
 ```{r select2-gnis, echo = TRUE}
 lagos_gnis <- lagos_gnis_3 %>%
   st_set_geometry(NULL) %>%
-  select(lagoslakeid, Permanent_Identifier, GNIS_ID, GNIS_Name, ReachCode, STATE, LAGOS_LakeName, AreaSqKm)
+  select(lagoslakeid, GNIS_ID, GNIS_Name, LAGOS_LakeName)
 ```
 
 # WQP (Water Quality Portal--STORET, NWIS, and more)
@@ -465,14 +466,18 @@ Retain only columns relevant to crosswalk.
 ```{r select2-wqp, echo = TRUE}
 lagos_wqp <- lagos_wqp_all %>%
   st_set_geometry(NULL) %>%
-  select(OrganizationIdentifier, MonitoringLocationIdentifier, MonitoringLocationName, ProviderName, Linked_lagoslakeid)
+  select(
+    WQP_MonitoringLocationIdentifier = MonitoringLocationIdentifier,
+    WQP_MonitoringLocationName = MonitoringLocationName, 
+    WQP_ProviderName = ProviderName, 
+    lagoslakeid = Linked_lagoslakeid)
 ```
 
 # NHDPlusV2 (value-added National Hydrography Dataset and basis for National Lakes Assessment, LakeCat)
-The medium-resolution NHD contains a popular medium-resolution representation of lakes and their hydrographic context. Because the high-resolution NHD data were used to generate LAGOS-US, we must find a connection between the datasets. This connection is the reach code, a 14-digit identifier used to identify each reach as part of a linear referencing system. ReachCodes must sometimes be modified (split, joined, re-assigned, deleted). The NHDReachCrossReference table tracks these changes and shows the new and old ReachCode. 
+The medium-resolution NHD contains a popular medium-resolution representation of lakes and their hydrographic context. Because the high-resolution NHD data were used to generate LAGOS-US, we must find a connection between the datasets. This connection is the reach code, a 14-digit identifier used to identify each reach as part of a linear referencing system. ReachCodes must sometimes be modified during NHD maintenance (split, joined, re-assigned, deleted). The NHDReachCrossReference table tracks these changes and shows the new and old ReachCode. 
 
 ## Import
-The version of the NHDReachCrossReference table that we use has already been filtered to include only the reach codes for lakes and reservoirs in the NHD HR (e.g. streams, wetlands, etc. were removed) to reduce the table size. You could use the full original table with no change to the results.
+The version of the NHDReachCrossReference table that we use has already been filtered to include only the reach codes for lakes and reservoirs in the NHD HR (e.g. streams, wetlands, etc. were removed), in order to reduce the table size. You could use the full original table with no change to the results shown here.
 
 Glimpse the NHD table.
 ```{r read-nhd}
@@ -594,30 +599,7 @@ nhd_gnis_nhd <- lagos_df %>%
 ```
 It works. **`r nrow(nhd_gnis_nhd)`** lakes that couldn't be linked with NHDReachCrossReference can be linked with the GNIS_ID value.
 
-Analysis on the early versions of LAGOS Lake Link showed that a signification fraction (about 25%) of lakes that should be found both the NHDPlusv2 and the NHD HR could not be linked through the reachcodes or names. As a result, we will add linkages for these lakes through the spatial relationships.
 
-Some thoughts:
-I don't want to add links based on spurious overlaps of the edges of lakes with nearby waterbodies.
-So try the centroids first, but this method has shortcomings.
-Convert the larger feature set to centroids to keep it fast and simple.
-```{r}
-
-lagos_nhd_not_missing <- lagos_nhd_all %>%
-  filter(!is.na(COMID))
-
-lagos_nhd_is_missing <- lagos_centroid %>%
-  inner_join((
-  lagos_nhd_all %>%
-  anti_join(lagos_nhd_not_missing, by = "lagoslakeid") %>%
-  left_join(nhd_gnis_nhd, by = "lagoslakeid") %>%
-  distinct(lagoslakeid, GNIS_Name)
-  ),
-  by = "lagoslakeid")
-
-test <- nhd_plus_orig %>%
-  st_join(lagos_nhd_is_missing)
-
-```
 
 ## Select again
 ```{r select2-nhd, echo = TRUE}
@@ -634,7 +616,103 @@ lagos_nhd <- lagos_df %>%
   select(lagoslakeid, NHDPlusv2_COMID, NHDPlusv2_ReachCode, NHDPlusv2_GNIS_Name, NHDPlusv2_AreaSqKm)
 ```
 
+# Spatial NHDPlusV2
+Analysis on early versions of the crosswalk showed that a significant fraction of lakes don't link between NHD versions. We will use a spatial join to close up the gap.
 
+## Filter and Select
+```{r}
+# # runs for 8 minutes: commented out, load the result of the next chunk from RData instead.
+# lagos_valid <- lagos %>% # include already matched lakes
+#   filter(st_is_valid(.)) %>% # invalid geometries mess up spatial work
+#   select(lagoslakeid, ReachCode, GNIS_Name, AreaSqKm)
+# 
+# nhd_plus_valid <- nhd_plus_orig %>%
+#   filter(FTYPE %in% c('LakePond', 'Reservoir')) %>% # NOW (only) I want to eliminate swamps from linkable
+#   filter(FCODE %in% c(39000,39004,39009,39010,39011,39012,43600,43613,43615,43617,43618,43619,43621)) %>% # only LAGOS lake types allowed to join now
+#   anti_join(filter(lagos_nhd, !is.na(NHDPlusv2_COMID)),
+#             by = c("REACHCODE" = "NHDPlusv2_ReachCode")) %>% #only unmatched
+#   st_transform(ALBERS_USGS) %>% # should be moved to earlier
+#   filter(st_is_valid(.)) %>%
+#   select(COMID, AREASQKM, REACHCODE, GNIS_NAME, FCODE)
+```
+
+## Spatial Join LAGOS-US
+In order to calculate the areal overlap, we will use a geometric intersection operation. 
+```{r}
+# # runs for 17 minutes
+# nhd_plus_lagos_intersect_precalc <- nhd_plus_valid %>%
+#   st_intersection(lagos_valid)
+# 
+# # don't combine with line above. takes forever!
+# nhd_plus_lagos_intersect <- nhd_plus_lagos_intersect_precalc %>%
+#   mutate(intersect_area_sqkm = units::drop_units(st_area(.))/1000000) %>%
+#   mutate(percent_overlap_medium_denom = 100*intersect_area_sqkm/AREASQKM) %>%
+#   mutate(percent_overlap_high_denom = 100*intersect_area_sqkm/AreaSqKm) %>%
+#   st_set_geometry(NULL)#NEVER use these polygons, they are not the lakes!
+# 
+# 
+# save(nhd_plus_lagos_intersect, file = './rdata/nhd_plus_lagos_intersect.RData')
+load('./rdata/nhd_plus_lagos_intersect.RData')
+```
+ 
+Examine the distribution of areal overlaps. It seems like 
+```{r}
+ggplot(data = nhd_plus_lagos_intersect, aes(x=percent_overlap_medium_denom, y = percent_overlap_high_denom)) + 
+  geom_point(size = .05) +
+  ylim(c(0,100)) +
+  xlim(c(0,100)) + 
+  coord_fixed() +
+  geom_vline(xintercept = 50, color = 'red') +
+  geom_hline(yintercept  = 50, color = 'red') +
+    geom_vline(xintercept = 80, color = 'blue') +
+  geom_hline(yintercept  = 80, color = 'blue') +
+  guides(color = FALSE) +
+  labs(x='% of NHDPlus lake that is overlapped', 
+       y = '% of LAGOS Lake (HR) that is overlapped',
+       title = "Overlap between lakes that can't be matched with reach code, but intersect")
+```
+
+Here the acceptance rules are one of the following:
+* Greater than 50% (simple majority) mutual overlap. Visual sampling indicates this threshold is appropriate.
+* NHDPlus lake is almost entirely (80%+) inside LAGOS lake (merge or redefining surrounding wetland). At least 5% mutual overlap.
+* LAGOS lake is almost entirely (80%) inside NHDPlus lake (split). At least 5% mutual overlap.
+```{r}
+nhd_lagos_spatial_accept <- nhd_plus_lagos_intersect %>%
+  filter(
+    (percent_overlap_high_denom > 50  & percent_overlap_medium_denom > 50) | 
+    (percent_overlap_medium_denom > 80 & percent_overlap_high_denom > 5) |
+    (percent_overlap_medium_denom > 5 & percent_overlap_high_denom > 80)
+  )
+```
+
+How many of the unmatched NHDPlus lakes link?
+```{r}
+fair_to_compare <- nhd_plus_valid %>%
+  filter(AREASQKM >= 0.01)
+100*nrow(nhd_lagos_spatial_accept)/nrow(fair_to_compare)
+```
+
+Attempt to characterize the ones that don't intersect.
+```{r}
+unlinked_nhd <- fair_to_compare %>%
+  anti_join(nhd_plus_lagos_intersect, by = 'COMID')
+
+ggplot(unlinked_nhd, aes(AREASQKM)) +
+  geom_histogram() +
+  xlim(c(0,.3))
+```
+About half are under 2 hectares, 90% are under 10 hectares. Checked some out--like 25 or so. Reasons: Not in LAGOS area, re-classified as another waterbody type (stream), hydrologic regime change, anthropogenic change. Less than 10% were similar enough to a valid current lake to wonder if we should in fact be linking them.
+
+
+## Select again
+```{r}
+lagos_nhd_spatial <- nhd_lagos_spatial_accept %>%
+  mutate(NHDPlusv2_COMID = COMID) %>%
+  mutate(NHDPlusv2_ReachCode = REACHCODE) %>% #anything in caps is from medium-res
+  mutate(NHDPlusv2_GNIS_Name = GNIS_NAME) %>%
+  mutate(NHDPlusv2_AreaSqKm = AREASQKM) %>%
+  select(lagoslakeid, NHDPlusv2_COMID, NHDPlusv2_ReachCode, NHDPlusv2_GNIS_Name, NHDPlusv2_AreaSqKm)
+```
 
 # LAGOS-NE
 LAGOS-NE was the first release from the LAGOS project describing lakes in 17 states in the northeastern states. It is similar in most ways to LAGOS-US, but the NHD snapshots were taken several years ago. This dataset can be downloaded and unzipped from [https://portal.edirepository.org/nis/mapbrowse?packageid=edi.98.1].
@@ -642,6 +720,18 @@ LAGOS-NE was the first release from the LAGOS project describing lakes in 17 sta
 When the LAGOS-US lagoslakeid values were generated, they were joined on Permanent_Identifier to the LAGOS-NE, so most of the lagoslakeid values should not have changed. Nonetheless, some could not be connected this way.
 
 ## Import
+
+Legacy IDs from LAGOSNE lakes_limno table.
+```{r}
+library(LAGOSNE)
+# # If you haven't used LAGOSNE library before, to recreate this chunk you will need to run the following line (only once, ever)
+# lagosne_get()
+legacy_ids <- lagosne_load()$lakes_limno %>%
+  select(lagoslakeid, legacyid) %>%
+  filter(!is.na(legacyid) & legacyid != '')
+```
+
+
 Glimpse the original LAGOS-NE dataset.
 ```{r read-ne}
 # lagosNE_orig <- st_read('C:/Users/smithn78/Dropbox/CSI/CSI_LAGOS-exports/LAGOS-NE-EDI/LAGOS-NE-GIS/FileGDB/LAGOS_NE_GIS_Data_v1.0.gdb', 'LAGOS_NE_All_Lakes_1ha') %>%
@@ -710,7 +800,13 @@ After trying the code below (currently commented out), it seems upon further obs
 ```{r select2-ne, echo = TRUE}
 lagosUS_lagosNE <- lagos_lagosNE_all %>%
   filter(!is.na(LAGOSNE_lagoslakeid)) %>%
-  arrange(lagoslakeid)
+  arrange(lagoslakeid) %>%
+  left_join(legacy_ids, by = "lagoslakeid") %>%
+  select(lagoslakeid,
+         LAGOSNE_lagoslakeid, 
+         LAGOSNE_legacyid = legacyid)
+
+glimpse(lagosUS_lagosNE)
 ```
 
 # NLA (US EPA National Lakes Assessment)
@@ -793,8 +889,8 @@ Select 2 columns from the NLA 2012 and lagoslakeid.
 ```{r, echo = TRUE}
 nla2012_lagos <- nla2012_lagos_join %>%
   select(
-    NLA2012_SITE_ID = SITE_ID,
-    NLA2007_SITE_ID = SITEID_07,
+    NLA2012_SITEID = SITE_ID,
+    NLA2007_SITEID = SITEID_07,
     lagoslakeid
   )
 ```
@@ -802,20 +898,20 @@ nla2012_lagos <- nla2012_lagos_join %>%
 
 # Final, single crosswalk table
 For the final table, we'll join all the previous results together with the entire LAGOS-US lake population on the left side of the join. Then, in order to facilitate a user understanding of 1-to-many relationships in the table, we will generate some count columns that indicate when multiple identifiers in one dataset relate to a single identifier in another. Finally, we will do the final selection of columns for the output and rename a few more columns to match the naming template.
+
+
 ```{r final}
 # start with lagos based stuff
-together <- lagos_gnis %>%
-  inner_join(lagos_centroid, by = "lagoslakeid") %>%
-  left_join(lagos_wqp, by = c("lagoslakeid" = "Linked_lagoslakeid")) %>%
-  left_join(lagos_nhd, by = "lagoslakeid") %>%
-  left_join(lagosUS_lagosNE, by = "lagoslakeid") %>%
+together <- lagos_centroid %>%
+  left_join(lagos_gnis, by = "lagoslakeid") %>%
+  left_join(lagos_wqp, by = "lagoslakeid") %>%
+  left_join(union(lagos_nhd, lagos_nhd_spatial), by = "lagoslakeid") %>%
+  left_join(lagosUS_lagosNE, by = "lagoslakeid") %>%  
   left_join(nla2012_lagos, by = "lagoslakeid")
-
-
 
 counts_round1 <- together %>%
   group_by(lagoslakeid) %>%
-  summarize(count_wqp_per_lagos_id = n_distinct(MonitoringLocationIdentifier, na.rm = TRUE), 
+  summarize(count_wqp_per_lagos_id = n_distinct(WQP_MonitoringLocationIdentifier, na.rm = TRUE), 
             count_nhdplusv2_per_lagos_id = n_distinct(NHDPlusv2_COMID, na.rm = TRUE),
             count_lagosNE_per_lagos_id = n_distinct(LAGOSNE_lagoslakeid, na.rm = TRUE)) %>%
   right_join(together, by = "lagoslakeid")
@@ -835,32 +931,36 @@ counts_round3 <- counts_round2 %>%
 final <- counts_round3 %>%
   select(
     lagoslakeid,
-    NHDHR_PermanentIdentifier = Permanent_Identifier.x,
-    NHDHR_ReachCode = ReachCode.x,
-    NHDHR_AreaSqKm = AreaSqKm.x,
+    NHDHR_PermanentIdentifier,
+    NHDHR_ReachCode,
+    NHDHR_AreaSqKm,
+    NHDHR_FDate,
     GNIS_ID,
     GNIS_Name,
     LAGOS_LakeName,
     LAGOS_CountyName,
     LAGOS_CountyFIPS,
-    LAGOS_LatitudeNAD83,
-    LAGOS_LongitudeNAD83,
-    State = STATE.x,
-    WQP_MonitoringLocationIdentifier = MonitoringLocationIdentifier,
-    WQP_MonitoringLocationName = MonitoringLocationName,
-    WQP_ProviderName = ProviderName,
+    LAGOS_LakeLatitude,
+    LAGOS_LakeLongitude,
+    LAGOS_State,
+    WQP_MonitoringLocationIdentifier,
+    WQP_MonitoringLocationName,
+    WQP_ProviderName,
     NHDPlusv2_COMID,
     NHDPlusv2_ReachCode,
     NHDPlusv2_AreaSqKm,
     LAGOSNE_lagoslakeid,
-    NLA2007_SITE_ID,
-    NLA2012_SITE_ID,
+    LAGOSNE_legacyid,
+    NLA2007_SITEID,
+    NLA2012_SITEID,
     count_wqp_per_lagos_id,
     count_nhdplusv2_per_lagos_id,
     count_lagos_per_nhdplusv2_id,
     count_lagosNE_per_lagos_id,
     count_lagos_per_lagosNE_id
-  )
+  ) %>%
+  rename_all(tolower)
+
 ```
 
 Glimpse at the final table.
@@ -872,15 +972,21 @@ An example of a  group of lakes in the final table.
 ```{r}
 final %>% filter(lagoslakeid %in% c(10,9,33099))
 ```
+Check against data dictionary.
+```{r}
+dd <- read_csv('./LAGOS_Lake_Link_data_dictionary.csv')
+all(pull(dd, `Column Name`) %in% names(final))
+all(names(final) %in% pull(dd, `Column Name`))
+```
 
 
 Write out the final product.
 ```{r write-final}
-#write_csv(final, 'LAGOS_Lake_Link_v0.csv')
+write_csv(final, 'LAGOS_Lake_Link_v1_20190128.csv')
 ```
 
 # List of to-dos and ideas to make more or better connections
-A) PROBLEM: Almost 25% of lakes cannot be linked to their NHDPlusv2 identifier (and therefore their StreamCat/LakeCat identifier). SOLUTION: Link differing NHD version lakes through spatial analysis. This is the highest impact suggestion.
+A) SOLVED
 B) PROBLEM: There are still many unlinked WQP sites and some of them do link easily if adequate rules are proposed, but introduce a higher possibility of creating incorrect links for other similar sites. SOLUTION: We could make more links to WQP sites if we added a way to indicate "low confidence" links. For instance: we could add more sites that are within 100 m but have no name match.
 C) PROBLEM: Some applications ask users to specify the lake they're at when the user does not have GPS (Ewing and others harmful algal bloom app). SOLUTION: Add "nearest municipality" using TIGER data and a "closest" spatial join. (Discussed previously with Holly Ewing and was identified as desirable at this time, but cut from this draft for time.)
 D) Manual links for LAGOS-NE lakes that have limno data (26 lakes) but that can't be found through the Permanent_Identifier or reach code in LAGOS-US. (In progress)

@@ -1,25 +1,29 @@
 Column Name,Column Type,Is Nullable,Definition,Source Dataset,Source Column Name,Example
 lagoslakeid,int,N,Unique lake identifier developed for LAGOS (US).,LAGOS-US,lagoslakeid,6340
-NHDHR_PermanentIdentifier,char,N,40-char GUID value that uniquely identifies the occurrence of each feature in The National Map. National Database primary key,NHD-HR,Permanent_Identifier,{9D15C911-618A-4921-9352-18250F36ED65}
-NHDHR_ReachCode,char,Y,"Unique identifier.  The first eight digits are the WBD_HUC8.  The next six digits are randomly assigned, sequential numbers that are unique within a HUC8.",NHD-HR,ReachCode,4.09E+12
-NHDHR_AreaSqKm,decimal,N,Area of areal feature based on Albers Equal Area.,NHD-HR,AreaSqKm,1.742
-GNIS_ID,int,Y,Unique identifier assigned by GNIS.,NHD-HR,GNIS_ID,1616968
-GNIS_Name,char,Y,"Proper name, specific term, or expression by which a particular geographic entity is known.",NHD-HR,GNIS_Name,Zukey Lake
-LAGOS_LakeName,char,Y,"Alternate (GNIS) names for the lake, separated by semi-colons.",GNIS,GNIS_Name,Zukey Lake; Strawberry Lake
-LAGOS_CountyName,,,Current name and the translated legal/statistical area description code for county.,,,
-LAGOS_CountyFIPS,,,5-digit concatenation of current state FIPS code and county FIPS code.,,,
-LAGOS_LatitudeNAD83,decimal,N,The latitude of the lake centroid (decimal format).,LAGOS-US,LatitudeNAD83,42.45195437
-LAGOS_LongitudeNAD83,decimal,N,The longitude of the lake centroid (decimal format).,LAGOS-US,LongitudeNAD83,-83.84438734
-State,char,N,2-character state name abbreviation. Border lakes are assigned to a a single state.,LAGOS-US,STATE,MI
-WQP_MonitoringLocationIdentifier,char,Y,"A designator used to describe the unique name, number, or code assigned to identify the monitoring location.",,MonitoringLocationIdentifier,21MICH-470570
-WQP_MonitoringLocationName,char,Y,The designator specified by the sampling organization for the site at which sampling or other activities are conducted.,WQP,MonitoringLocationName,"STRAWBERRY LAKE NORTHWEST BASIN, HAMBURG TOWNSHIP, SECTION 27"
-WQP_ProviderName,char,Y,"The source system that provided data to the Water Quality Portal (NWIS, STORET, STEWARDS, etc).",WQP,ProviderName,STORET
-NHDPlusv2_COMID,char,Y,Common identifier of the NHD Waterbody feature.,NHDPlusv2,COMID,13174565
-NHDPlusv2_ReachCode,char,Y,Reach Code assigned to feature.,NHDPlusv2,REACHCODE,4.09E+12
-NHDPlusv2_AreaSqKm,decimal,Y,Feature area in square kilometers.,NHDPlusV2,AreaSqKm,1.593
-LAGOSNE_lagoslakeid,int,Y,Unique lake identifier developed for LAGOS (NE).,LAGOS-NE,lagoslakeid,6340
-count_wqp_per_lagos_id,int,Y,Count of WQP sites within the LAGOS-US lake.,,,11
-count_nhdplusv2_per_lagos_id,int,Y,Count of NHDPlusV2 polygons matching the LAGOS-US lagoslakeid.,,,1
-count_lagos_per_nhdplusv2_id,int,Y,Count of LAGOS-US polygons matching the NHDPlusV2 COMID.,,,1
-count_lagosNE_per_lagos_id,int,Y,Count of LAGOS-NE lagoslakeids matching the LAGOS-US lagoslakeid.,,,1
-count_lagos_per_lagosNE_id,int,Y,Count of LAGOS-US lagoslakeids matching the LAGOS-NE lagoslakeid.,,,1
+nhdhr_permanentidentifier,char,N,40-char GUID value that uniquely identifies the occurrence of each feature in The National Map. National Database primary key,NHD-HR,Permanent_Identifier,{9D15C911-618A-4921-9352-18250F36ED65}
+nhdhr_reachcode,char,Y,"Unique identifier. The first eight digits are the WBD_HUC8.  The next six digits are randomly assigned, sequential numbers that are unique within a HUC8.",NHD-HR,ReachCode,4090000000000
+nhdhr_areasqkm,decimal,N,Area of areal feature based on Albers Equal Area.,NHD-HR,AreaSqKm,1.742
+nhdhr_fdate,datetime,N,Date of last feature modification in National Hydrography Dataset.,NHD-HR,Fdate,3/16/2004  1:37:00 PM
+gnis_id,int,Y,Unique identifier assigned by GNIS.,NHD-HR,GNIS_ID,1616968
+gnis_name,char,Y,"Proper name, specific term, or expression by which a particular geographic entity is known.",NHD-HR,GNIS_Name,Zukey Lake
+lagos_lakename,char,Y,"Alternate (GNIS) names for the lake, separated by semi-colons.",GNIS,GNIS_Name,Zukey Lake; Strawberry Lake
+lagos_countyname,char,Y,Current name and the translated legal/statistical area description code for county.,TIGER County,NAMELSAD,Ingham County
+lagos_countyfips,char,Y,5-digit concatenation of current state FIPS code and county FIPS code.,TIGER County,GEOID,26065
+lagos_lakelatitude,decimal,N,The latitude of the lake centroid (NAD83).,LAGOS-US,LatitudeNAD83,42.45195437
+lagos_lakelongitude,decimal,N,The longitude of the lake centroid (NAD83).,LAGOS-US,LongitudeNAD83,-83.84438734
+lagos_state,char,N,2-character state name abbreviation. Border lakes are assigned to a a single state.,TIGER State,STATE,MI
+wqp_monitoringlocationidentifier,char,Y,"A designator used to describe the unique name, number, or code assigned to identify the monitoring location.",WQP,MonitoringLocationIdentifier,21MICH-470570
+wqp_monitoringlocationname,char,Y,The designator specified by the sampling organization for the site at which sampling or other activities are conducted.,WQP,MonitoringLocationName,"STRAWBERRY LAKE NORTHWEST BASIN, HAMBURG TOWNSHIP, SECTION 27"
+wqp_providername,char,Y,"The source system that provided data to the Water Quality Portal (NWIS, STORET, STEWARDS, etc).",WQP,ProviderName,STORET
+nhdplusv2_comid,char,Y,Common identifier of the NHD Waterbody feature.,NHDPlusv2,COMID,13174565
+nhdplusv2_reachcode,char,Y,Reach Code assigned to feature.,NHDPlusv2,REACHCODE,4090000000000
+nhdplusv2_areasqkm,decimal,Y,Feature area in square kilometers.,NHDPlusV2,AreaSqKm,1.593
+lagosne_lagoslakeid,int,Y,Unique lake identifier developed for LAGOS (NE).,LAGOS-NE,lagoslakeid,6340
+lagosne_legacyid,char,Y,Unique lake identifier from the original LAGOS-NE water quality source dataset. This is not standardized and each source dataset has its own system.,LAGOS-NE,legacyid,210426X
+nla2007_siteid,char,Y,Lake site identifier from National Lakes Assessment 2007 survey,NLA 2012,SITEID_07,NLA06608-2187
+nla2012_siteid,char,Y,Lake site identifier from National Lakes Assessment 2012 survey,NLA 2012,SITE_ID,NLA12_AL-101
+count_wqp_per_lagos_id,int,Y,Count of WQP sites within the LAGOS-US lake.,LAGOS-US,count_wqp_per_lagos_id,11
+count_nhdplusv2_per_lagos_id,int,Y,Count of NHDPlusV2 polygons matching the LAGOS-US lagoslakeid.,LAGOS-US,count_nhdplusv2_per_lagos_id,1
+count_lagos_per_nhdplusv2_id,int,Y,Count of LAGOS-US polygons matching the NHDPlusV2 COMID.,LAGOS-US,count_lagos_per_nhdplusv2_id,2
+count_lagosne_per_lagos_id,int,Y,Count of LAGOS-NE lagoslakeids matching the LAGOS-US lagoslakeid.,LAGOS-US,count_lagosNE_per_lagos_id,1
+count_lagos_per_lagosne_id,int,Y,Count of LAGOS-US lagoslakeids matching the LAGOS-NE lagoslakeid.,LAGOS-US,count_lagos_per_lagosNE_id,2
