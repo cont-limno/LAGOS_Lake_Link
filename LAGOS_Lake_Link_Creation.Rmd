@@ -919,7 +919,7 @@ counts_round1 <- together %>%
 counts_round2 <- counts_round1 %>%
   filter(!is.na(NHDPlusv2_COMID)) %>%
   group_by(NHDPlusv2_COMID) %>%
-  summarize(count_lagos_per_nhdplusv2_id = n_distinct(lagoslakeid, na.rm = TRUE))%>%
+  summarize(count_lagos_per_nhdplusv2_id = n_distinct(lagoslakeid, na.rm = TRUE)) %>%
   right_join(counts_round1, by = "NHDPlusv2_COMID")
 
 counts_round3 <- counts_round2 %>%
@@ -966,6 +966,8 @@ final <- counts_round3 %>%
 Glimpse at the final table.
 ```{r}
 glimpse(final, width = 100)
+
+distinct(final, count_lagos_per_nhdplusv2_id)
 ```
 
 An example of a  group of lakes in the final table.
