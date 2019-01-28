@@ -882,7 +882,7 @@ n_nla_lagos <- nla2012_lagos_join %>%
   distinct(SITE_ID) %>%
   nrow()
 ```
-**`r n_nla_nhd`** lakes out of **`r nrow(nla2012)`** NLA lakes cannot be linked to the NHDPlusV2. We did try the V1-to-V2 crosswalk and were not able to make any additional links. Far more lakes are unable to be linked to a lagoslakeid: **`r n_nla_lagos`**. This is due to the poor match between the NHDPlusV2 and the LAGOS Lake population. If we improve that link, these numbers will increase. This work is proposed.
+**`r n_nla_nhd`** lakes out of **`r nrow(nla2012)`** NLA lakes cannot be linked to the NHDPlusV2. We did try the V1-to-V2 crosswalk and were not able to make any additional links. Far more lakes are unable to be linked to a lagoslakeid: **`r n_nla_lagos`**. This is due to the poor match between the NHDPlusV2 and the LAGOS Lake population, even after adding a spatial join to decrease the gap. Most of the poor match is due to valid changes reflected as The National Map is updated over time. Upon the LAGOS-US data release, we will account for additional NLA links discovered with our manual linking process.
 
 ## Select again
 Select 2 columns from the NLA 2012 and lagoslakeid.
@@ -1000,7 +1000,7 @@ These items can be described as designed limitations because this lake identifie
 G) A user cannot find identifiers pertaining to a lake that isn't in LAGOS-US. SOLUTION: Use outer joins and allow the crosswalk to grow a fair amount in size to allow NULLs in any of the identifiers. Revise the documentation to reflect the expansion.
 H) A user cannot connect WQP sites to the NHDPlusV2 representation of lakes. Example: 2 NHDPlusV2 lakes to 1 LAGOS-US lake. SOLUTION: Refine the entity-relationship model to join between the WQP and NHDPlusV2 directly. Rework subsequent joins in the script to accomodate the change. This change probably won't affect the overall size or usability of the crosswalk too much.
 
-## Proposed ER Diagram demonstrating change "A" and "H" above
+## Proposed ER Diagram demonstrating change "H" above
 ![*Proposed entity-relationship diagram showing two additions, in color*](./images/ERD_proposed.PNG)
 
 # Link to Demo document
