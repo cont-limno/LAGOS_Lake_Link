@@ -10,5 +10,4 @@ https://cont-limno.github.io/LAGOS_Lake_Link/
 https://github.com/cont-limno/LAGOS_Lake_Link/blob/master/LAGOS_Lake_Link_data_dictionary.csv
 
 ## THE DATASET (download link)
-https://github.com/cont-limno/LAGOS_Lake_Link/raw/master/LAGOS_Lake_Link_v0.zip
-
+https://github.com/cont-limno/LAGOS_Lake_Link/raw/master/LAGOS_Lake_Link_v1_20190128.zip
